@@ -23,12 +23,18 @@ public class JdbcTemplate {
         return dataSource;
     }
 
-    public Object query(String sql, final RowMapper rowMapper, final Object... args) {
+    public Object query(String sql,RowMapper rowMapper,Object... args){
+        return query(new SimplePreparedStatementCreator(sql),new ArgumentPreparedStatementSetter(args),rowMapper);
+    }
+
+    public int update(String sql, Object... args){
+        return update(new SimplePreparedStatementCreator(sql),new ArgumentPreparedStatementSetter(args));
+    }
+
+    public Object query(PreparedStatementCreator psc, final PreparedStatementSetter pss, final RowMapper rowMapper) {
         class QueryPreparedStatementCallBack<T> implements PreparedStatementCallback{
             public Object doInPreparedStatement(PreparedStatement stmt) throws SQLException {
-                for (int i = 0; i < args.length; i++) {
-                    stmt.setObject(i+1,args[i]);
-                }
+                pss.setValues(stmt);
                 ResultSet rs = stmt.executeQuery();
                 int rowNum = 0;
                 List<Object> results = new ArrayList<Object>();
@@ -39,20 +45,16 @@ public class JdbcTemplate {
                 return results;
             }
         }
-        PreparedStatementCreator psc = new SimplePreparedStatementCreator(sql);
         return execute(psc,new QueryPreparedStatementCallBack());
     }
 
-    public int update(String sql, final Object... args) {
+    public int update(PreparedStatementCreator psc, final PreparedStatementSetter pss) {
         class UpdatePreparedStatementCallBack implements PreparedStatementCallback {
             public Integer doInPreparedStatement(PreparedStatement prestmt) throws SQLException {
-                for (int i = 0; i < args.length; i++) {
-                    prestmt.setObject(i+1,args[i]);
-                }
+                pss.setValues(prestmt);
                 return prestmt.executeUpdate();
             }
         }
-        PreparedStatementCreator psc = new SimplePreparedStatementCreator(sql);
         return (Integer) execute(psc,new UpdatePreparedStatementCallBack());
     }
 
