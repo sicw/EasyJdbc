@@ -23,9 +23,12 @@ public class JdbcTemplate {
         return dataSource;
     }
 
-    public Object query(String sql, final RowMapper rowMapper, Object... args) {
+    public Object query(String sql, final RowMapper rowMapper, final Object... args) {
         class QueryPreparedStatementCallBack<T> implements PreparedStatementCallback{
             public Object doInPreparedStatement(PreparedStatement stmt) throws SQLException {
+                for (int i = 0; i < args.length; i++) {
+                    stmt.setObject(i+1,args[i]);
+                }
                 ResultSet rs = stmt.executeQuery();
                 int rowNum = 0;
                 List<Object> results = new ArrayList<Object>();
@@ -36,27 +39,29 @@ public class JdbcTemplate {
                 return results;
             }
         }
-        return execute(sql,new QueryPreparedStatementCallBack(),args);
+        PreparedStatementCreator psc = new SimplePreparedStatementCreator(sql);
+        return execute(psc,new QueryPreparedStatementCallBack());
     }
 
-    public Integer update(String sql, Object... args) {
+    public int update(String sql, final Object... args) {
         class UpdatePreparedStatementCallBack implements PreparedStatementCallback {
             public Integer doInPreparedStatement(PreparedStatement prestmt) throws SQLException {
+                for (int i = 0; i < args.length; i++) {
+                    prestmt.setObject(i+1,args[i]);
+                }
                 return prestmt.executeUpdate();
             }
         }
-        return (Integer) execute(sql,new UpdatePreparedStatementCallBack(),args);
+        PreparedStatementCreator psc = new SimplePreparedStatementCreator(sql);
+        return (Integer) execute(psc,new UpdatePreparedStatementCallBack());
     }
 
-    public Object execute(String sql, PreparedStatementCallback action, Object... args){
+    public Object execute(PreparedStatementCreator psc, PreparedStatementCallback action){
         Connection conn = null;
         PreparedStatement ps = null;
         try {
             conn = DataSourceUtils.getConnection(getDataSource());
-            ps = conn.prepareStatement(sql);
-            for (int i = 0; i < args.length; i++) {
-                ps.setObject(i+1,args[i]);
-            }
+            ps = psc.createPreparedStatement(conn);
             return action.doInPreparedStatement(ps);
         }catch (Exception e){
             e.printStackTrace();
@@ -65,5 +70,18 @@ public class JdbcTemplate {
             JdbcUtils.closeStatement(ps);
         }
         return null;
+    }
+
+    private static class SimplePreparedStatementCreator implements PreparedStatementCreator{
+
+        private final String sql;
+
+        public SimplePreparedStatementCreator(String sql){
+            this.sql = sql;
+        }
+
+        public PreparedStatement createPreparedStatement(Connection conn) throws SQLException {
+            return conn.prepareStatement(sql);
+        }
     }
 }
